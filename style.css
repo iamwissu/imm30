@@ -259,6 +259,7 @@ a { color: inherit; }
 .btn-danger { background: var(--status-bad); color: #fff; }
 .btn-link { background: none; border: none; color: var(--primary); cursor: pointer; font-weight: 700; font-size: 0.86rem; padding: 4px 6px; }
 .btn-link-danger { color: var(--status-bad); }
+.row-actions { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 
 /* preview box on payments page */
 .preview-box {
@@ -389,8 +390,6 @@ a { color: inherit; }
 
 @media print {
   body.printing .app-shell { display: none !important; }
-  body.printing .modal-overlay { display: none !important; }
-  body.printing .toast-host { display: none !important; }
   body.printing #printArea { display: block !important; }
   .print-receipt { max-width: 380px; margin: 0 auto; font-family: 'Tajawal', sans-serif; direction: rtl; }
   .pr-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.95rem; }

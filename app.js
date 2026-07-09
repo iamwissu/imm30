@@ -133,7 +133,10 @@ function openApartmentModal(aptId) {
               <td>${UTIL.formatDate(p.date)}</td>
               <td>${UTIL.formatMoney(p.amount)}</td>
               <td>${p.monthsCovered}</td>
-              <td><button class="btn-link" data-print-receipt="${p.id}">طباعة الوصل</button></td>
+              <td class="row-actions">
+                <button class="btn-link" data-print-receipt="${p.id}">طباعة الوصل</button>
+                <button class="btn-link btn-link-danger" data-del-receipt="${p.id}">حذف</button>
+              </td>
             </tr>`).join('') || '<tr><td colspan="4" class="empty-cell">لا توجد أداءات مسجلة بعد</td></tr>'}
         </tbody>
       </table>
@@ -147,6 +150,13 @@ function openApartmentModal(aptId) {
     btn.addEventListener('click', () => {
       const payment = apt.payments.find(p => p.id === btn.getAttribute('data-print-receipt'));
       PRINT.printHTML(PRINT.receiptHTML(DATA, apt, payment));
+    });
+  });
+  body.querySelectorAll('[data-del-receipt]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const paymentId = btn.getAttribute('data-del-receipt');
+      closeModal('aptModal');
+      deletePaymentWithConfirm(apt.id, paymentId);
     });
   });
   document.getElementById('modalRecordPayment').addEventListener('click', () => {
@@ -212,7 +222,10 @@ function renderRecentPayments() {
       <td>شقة ${apt.number} — ${escapeAttr(apt.name)}</td>
       <td>${UTIL.formatMoney(payment.amount)}</td>
       <td>${payment.monthsCovered}</td>
-      <td><button class="btn-link" data-print-recent="${apt.id}|${payment.id}">طباعة الوصل</button></td>
+      <td class="row-actions">
+        <button class="btn-link" data-print-recent="${apt.id}|${payment.id}">طباعة الوصل</button>
+        <button class="btn-link btn-link-danger" data-del-recent="${apt.id}|${payment.id}">حذف</button>
+      </td>
     </tr>
   `).join('') || `<tr><td colspan="5" class="empty-cell">لم يتم تسجيل أي أداء بعد</td></tr>`;
 
@@ -223,6 +236,33 @@ function renderRecentPayments() {
       const payment = apt.payments.find(p => p.id === payId);
       PRINT.printHTML(PRINT.receiptHTML(DATA, apt, payment));
     });
+  });
+
+  tbody.querySelectorAll('[data-del-recent]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const [aptId, payId] = btn.getAttribute('data-del-recent').split('|');
+      deletePaymentWithConfirm(aptId, payId);
+    });
+  });
+}
+
+/** Shared delete flow used from both the payments list and the apartment
+ *  detail modal. Warns clearly since removing an older payment can shift
+ *  "receipt valid until" for every payment recorded after it. */
+function deletePaymentWithConfirm(aptId, paymentId) {
+  const apt = DATA.apartments.find(a => a.id === aptId);
+  const payment = apt.payments.find(p => p.id === paymentId);
+  if (!apt || !payment) return;
+  const isLatest = apt.payments.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0).at(-1).id === paymentId;
+  const msg = isLatest
+    ? `حذف أداء بمبلغ ${UTIL.formatMoney(payment.amount)} ${DATA.meta.currency} لشقة ${apt.number} — ${escapeAttr(apt.name)}؟ سيتم تحديث المتأخرات وتاريخ صلاحية الوصل تلقائيا.`
+    : `تنبيه: هذا الأداء ليس الأخير لهذه الشقة. حذفه سيُعيد احتساب تاريخ صلاحية الوصل لكل الأداءات اللاحقة له. متابعة؟`;
+  confirmDialog(msg, () => {
+    DB.deletePayment(DATA, aptId, paymentId);
+    persist();
+    toast('تم حذف الأداء وتحديث وضعية الشقة', 'success');
+    renderDashboard();
+    renderPaymentsView();
   });
 }
 
@@ -430,9 +470,9 @@ function renderApartmentsSettingsTable() {
   });
   tbody.querySelectorAll('[data-apt-covered]').forEach(inp => {
     inp.addEventListener('change', () => {
-      const apt = DATA.apartments.find(a => a.id === inp.getAttribute('data-apt-covered'));
+      const aptId = inp.getAttribute('data-apt-covered');
       if (inp.value) {
-        apt.lastCoveredMonth = inp.value;
+        DB.setLastCoveredMonth(DATA, aptId, inp.value);
         persist();
         renderApartmentsSettingsTable();
         renderDashboard();
@@ -470,6 +510,7 @@ function wireSettingsForm() {
       id: DB.makeId('apt'),
       number: nextNumber,
       name: `الشقة ${nextNumber}`,
+      openingCoveredMonth: DB.todayMonthKey(),
       lastCoveredMonth: DB.todayMonthKey(),
       creditRemainder: 0,
       payments: []

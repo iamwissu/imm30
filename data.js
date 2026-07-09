@@ -97,10 +97,15 @@ const SEED_OPENING_BALANCE = SEED_KNOWN_BALANCE - SEED_TOTAL_PAYMENTS + SEED_TOT
 
 function buildSeedData() {
   const apartments = SEED_APARTMENTS.map(a => {
+    const monthsFromPayment = a.periodPayment > 0 ? Math.floor(a.periodPayment / MONTHLY_FEE_DEFAULT) : 0;
     const apt = {
       id: makeId('apt'),
       number: a.number,
       name: a.name,
+      // The month the apartment was covered through BEFORE the seeded
+      // payment below is replayed on top of it (kept in sync so future
+      // payment deletions still replay to the correct state).
+      openingCoveredMonth: addMonths(a.lastCoveredMonth, -monthsFromPayment),
       lastCoveredMonth: a.lastCoveredMonth,
       creditRemainder: 0,
       payments: []
@@ -110,7 +115,7 @@ function buildSeedData() {
         id: makeId('pay'),
         date: `${SEED_REFERENCE_MONTH}-30`,
         amount: a.periodPayment,
-        monthsCovered: Math.floor(a.periodPayment / MONTHLY_FEE_DEFAULT),
+        monthsCovered: monthsFromPayment,
         note: 'ترحيل من كشف يناير - يونيو 2026'
       });
     }
@@ -174,6 +179,7 @@ function resetToBlank(buildingName, apartmentCount) {
       id: makeId('apt'),
       number: i,
       name: `الشقة ${i}`,
+      openingCoveredMonth: now,
       lastCoveredMonth: now,
       creditRemainder: 0,
       payments: []
@@ -222,38 +228,81 @@ function totalPaidByApartment(apt) {
   return apt.payments.reduce((s, p) => s + p.amount, 0);
 }
 
+/** Recomputes an apartment's lastCoveredMonth and creditRemainder by
+ *  replaying every payment, in date order, starting from its
+ *  openingCoveredMonth (the state before any recorded payment). This is
+ *  what makes deleting an arbitrary past payment safe: we don't patch
+ *  lastCoveredMonth incrementally, we rebuild it from scratch every time
+ *  the payment list changes. */
+function recomputeApartment(apt, data) {
+  const fee = data.meta.monthlyFee || MONTHLY_FEE_DEFAULT;
+  if (!apt.openingCoveredMonth) apt.openingCoveredMonth = apt.lastCoveredMonth;
+
+  const ordered = apt.payments.slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  let covered = apt.openingCoveredMonth;
+  let credit = 0;
+  ordered.forEach(p => {
+    const totalAvailable = credit + p.amount;
+    const monthsCovered = Math.floor(totalAvailable / fee);
+    credit = round2(totalAvailable - monthsCovered * fee);
+    covered = addMonths(covered, monthsCovered);
+    p.monthsCovered = monthsCovered;
+  });
+
+  apt.lastCoveredMonth = covered;
+  apt.creditRemainder = credit;
+}
+
 /** Apply a payment: pays off debt first (by advancing lastCoveredMonth),
  *  any remainder that doesn't make a full month is kept as credit and
  *  combined with the next payment. Returns a summary of what happened. */
 function recordPayment(data, apartmentId, amount, date, note) {
   const apt = data.apartments.find(a => a.id === apartmentId);
   if (!apt) throw new Error('Apartment not found');
-  const fee = data.meta.monthlyFee || MONTHLY_FEE_DEFAULT;
-
-  const totalAvailable = (apt.creditRemainder || 0) + amount;
-  const monthsCovered = Math.floor(totalAvailable / fee);
-  const remainder = totalAvailable - monthsCovered * fee;
 
   const beforeMonth = apt.lastCoveredMonth;
-  apt.lastCoveredMonth = addMonths(apt.lastCoveredMonth, monthsCovered);
-  apt.creditRemainder = round2(remainder);
-
   const payment = {
     id: makeId('pay'),
     date: date || new Date().toISOString().slice(0, 10),
     amount: round2(amount),
-    monthsCovered,
+    monthsCovered: 0,
     note: note || ''
   };
   apt.payments.push(payment);
+  recomputeApartment(apt, data);
 
   return {
     payment,
-    monthsCovered,
+    monthsCovered: payment.monthsCovered,
     fromMonth: beforeMonth,
     toMonth: apt.lastCoveredMonth,
     remainderCredit: apt.creditRemainder
   };
+}
+
+/** Removes a payment and rebuilds the apartment's debt state from
+ *  scratch, so deleting an old payment correctly ripples forward
+ *  through every payment recorded after it. */
+function deletePayment(data, apartmentId, paymentId) {
+  const apt = data.apartments.find(a => a.id === apartmentId);
+  if (!apt) throw new Error('Apartment not found');
+  apt.payments = apt.payments.filter(p => p.id !== paymentId);
+  recomputeApartment(apt, data);
+  return apt;
+}
+
+/** Manually set an apartment's "receipt valid until" month from Settings.
+ *  Shifts openingCoveredMonth by the same delta so that replaying the
+ *  existing payment history still lands on this corrected value — the
+ *  override survives future payment deletions instead of being lost. */
+function setLastCoveredMonth(data, apartmentId, newMonthKey) {
+  const apt = data.apartments.find(a => a.id === apartmentId);
+  if (!apt) throw new Error('Apartment not found');
+  if (!apt.openingCoveredMonth) apt.openingCoveredMonth = apt.lastCoveredMonth;
+  const delta = monthsBetween(apt.lastCoveredMonth, newMonthKey);
+  apt.openingCoveredMonth = addMonths(apt.openingCoveredMonth, delta);
+  recomputeApartment(apt, data);
 }
 
 function addExpense(data, category, amount, date, notes) {
@@ -356,7 +405,10 @@ window.DB = {
   debtAmount,
   apartmentStatus,
   totalPaidByApartment,
+  recomputeApartment,
   recordPayment,
+  deletePayment,
+  setLastCoveredMonth,
   addExpense,
   totalExpenses,
   totalPayments,
