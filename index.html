@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تسيير مالية العمارة</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-name">تسيير مالية العمارة</div>
+      <div class="brand-tag">إدارة الأداءات والمصاريف والتقارير</div>
+    </div>
+    <div class="zellige-strip"></div>
+    <ul class="nav-list">
+      <li><button class="nav-btn active" data-nav="dashboard"><span class="nav-icon">⌂</span> لوحة القيادة</button></li>
+      <li><button class="nav-btn" data-nav="payments"><span class="nav-icon">₪</span> تسجيل الأداءات</button></li>
+      <li><button class="nav-btn" data-nav="expenses"><span class="nav-icon">✎</span> المصاريف</button></li>
+      <li><button class="nav-btn" data-nav="reports"><span class="nav-icon">▤</span> التقارير</button></li>
+      <li><button class="nav-btn" data-nav="settings"><span class="nav-icon">⚙</span> الإعدادات والشقق</button></li>
+    </ul>
+    <div class="sidebar-footer">تعمل بالكامل داخل متصفحك — لا حاجة للإنترنت بعد التحميل الأول</div>
+  </nav>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="app-main" id="appMain">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle">☰</button>
+      <div class="topbar-title">تسيير مالية العمارة</div>
+    </div>
+
+    <!-- ===================== DASHBOARD ===================== -->
+    <section class="view active" id="view-dashboard">
+      <div class="view-header">
+        <h2 id="dashBuildingName">العمارة</h2>
+        <p>نظرة عامة على وضعية الأداءات والمتأخرات والرصيد</p>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-label">الرصيد الحالي</div>
+          <div class="kpi-value" id="kpiBalance">—</div>
+        </div>
+        <div class="kpi-card warn">
+          <div class="kpi-label">مجموع المتأخرات</div>
+          <div class="kpi-value" id="kpiDebt">—</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">الشقق المتأخرة عن الأداء</div>
+          <div class="kpi-value" id="kpiLate">—</div>
+        </div>
+      </div>
+
+      <div class="apartment-grid" id="apartmentGrid"></div>
+    </section>
+
+    <!-- ===================== PAYMENTS ===================== -->
+    <section class="view" id="view-payments">
+      <div class="view-header">
+        <h2>تسجيل أداء</h2>
+        <p>اختر الشقة وأدخل المبلغ المؤدى، وسيتم تحديث المتأخرات وتاريخ صلاحية الوصل تلقائيا</p>
+      </div>
+
+      <div class="form-card">
+        <form id="paymentForm">
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="paySelectApt">الشقة</label>
+              <select id="paySelectApt"></select>
+            </div>
+            <div class="form-field">
+              <label for="payAmount">المبلغ المؤدى (DH)</label>
+              <input type="number" id="payAmount" min="1" step="0.01" placeholder="مثال: 100" required>
+            </div>
+            <div class="form-field">
+              <label for="payDate">تاريخ الأداء</label>
+              <input type="date" id="payDate" required>
+            </div>
+            <div class="form-field">
+              <label for="payNote">ملاحظة (اختياري)</label>
+              <input type="text" id="payNote" placeholder="مثال: أداء نقدي">
+            </div>
+          </div>
+
+          <div class="preview-box" id="payPreview">
+            <p class="hint">أدخل المبلغ لمعاينة أثره على وضعية الشقة</p>
+          </div>
+
+          <button type="submit" class="btn btn-primary">تسجيل الأداء</button>
+        </form>
+      </div>
+
+      <div class="receipt-prompt hidden" id="receiptPrompt"></div>
+
+      <div class="section-card">
+        <h3>آخر الأداءات المسجلة</h3>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>التاريخ</th><th>الشقة</th><th>المبلغ</th><th>الأشهر</th><th></th></tr></thead>
+            <tbody id="recentPaymentsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== EXPENSES ===================== -->
+    <section class="view" id="view-expenses">
+      <div class="view-header">
+        <h2>المصاريف</h2>
+        <p>سجل مصاريف العمارة، وسيتم احتساب أثرها على الرصيد تلقائيا</p>
+      </div>
+
+      <div class="form-card">
+        <form id="expenseForm">
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="expCategory">نوع المصروف</label>
+              <select id="expCategory"></select>
+            </div>
+            <div class="form-field hidden" id="expOtherWrap">
+              <label for="expOther">تحديد نوع المصروف</label>
+              <input type="text" id="expOther" placeholder="اكتب نوع المصروف">
+            </div>
+            <div class="form-field">
+              <label for="expAmount">المبلغ (DH)</label>
+              <input type="number" id="expAmount" min="1" step="0.01" required>
+            </div>
+            <div class="form-field">
+              <label for="expDate">التاريخ</label>
+              <input type="date" id="expDate" required>
+            </div>
+            <div class="form-field full">
+              <label for="expNotes">ملاحظات (اختياري)</label>
+              <textarea id="expNotes" rows="2" placeholder="تفاصيل إضافية"></textarea>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">تسجيل المصروف</button>
+        </form>
+      </div>
+
+      <div class="section-card">
+        <h3>سجل المصاريف</h3>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>ملاحظات</th><th></th></tr></thead>
+            <tbody id="expensesBody"></tbody>
+          </table>
+        </div>
+        <div class="footer-total">المجموع: <span id="expensesTotal">—</span></div>
+      </div>
+    </section>
+
+    <!-- ===================== REPORTS ===================== -->
+    <section class="view" id="view-reports">
+      <div class="view-header">
+        <h2>كشوف الحساب الدورية</h2>
+        <p>كشف تلقائي كل ستة أشهر، بنفس بنية الكشف المعتمدة سابقا، قابل للطباعة أو الحفظ كملف PDF</p>
+      </div>
+
+      <div class="report-controls">
+        <div class="form-field">
+          <label for="reportPeriod">الفترة</label>
+          <select id="reportPeriod"></select>
+        </div>
+        <button class="btn btn-primary" id="reportPrint">طباعة / حفظ PDF</button>
+      </div>
+
+      <div class="report-preview-frame">
+        <div id="reportPreviewArea"></div>
+      </div>
+    </section>
+
+    <!-- ===================== SETTINGS ===================== -->
+    <section class="view" id="view-settings">
+      <div class="view-header">
+        <h2>الإعدادات والشقق</h2>
+        <p>تعديل بيانات العمارة والشقق، والنسخ الاحتياطي للبيانات</p>
+      </div>
+
+      <div class="settings-grid">
+        <div class="section-card">
+          <h3>معلومات العمارة</h3>
+          <form id="buildingInfoForm">
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="setBuildingName">اسم العمارة</label>
+                <input type="text" id="setBuildingName" required>
+              </div>
+              <div class="form-field">
+                <label for="setMonthlyFee">الوجيبة الشهرية (DH)</label>
+                <input type="number" id="setMonthlyFee" min="1" required>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary">حفظ</button>
+          </form>
+        </div>
+
+        <div class="section-card">
+          <h3>الشقق</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>رقم</th><th>الاسم</th><th>الوصل صالح إلى غاية (قابل للتعديل)</th><th>المتأخرات</th><th></th></tr></thead>
+              <tbody id="aptSettingsBody"></tbody>
+            </table>
+          </div>
+          <div style="margin-top:12px;">
+            <button class="btn btn-secondary" id="addAptBtn">+ إضافة شقة</button>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <h3>النسخ الاحتياطي</h3>
+          <p class="hint">صدّر نسخة احتياطية بصيغة JSON بشكل دوري، واحتفظ بها في مكان آمن.</p>
+          <div class="backup-actions">
+            <button class="btn btn-secondary" id="exportBtn">تصدير نسخة احتياطية</button>
+            <label class="btn btn-secondary file-btn">
+              استيراد نسخة احتياطية
+              <input type="file" id="importInput" accept="application/json">
+            </label>
+          </div>
+        </div>
+
+        <div class="section-card danger-zone">
+          <h3>منطقة الخطر</h3>
+          <p class="hint">حذف جميع البيانات والبدء من جديد بـ 16 شقة فارغة. لا يمكن التراجع عن هذا الإجراء (يُنصح بتصدير نسخة احتياطية أولا).</p>
+          <button class="btn btn-danger" id="resetBtn">إعادة تعيين كل البيانات</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- Apartment detail modal -->
+<div class="modal-overlay" id="aptModal">
+  <div class="modal-box">
+    <button class="modal-close" data-close-modal="aptModal">×</button>
+    <div id="aptModalBody"></div>
+  </div>
+</div>
+
+<!-- Confirm dialog -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-box small-modal">
+    <p id="confirmMessage"></p>
+    <div class="modal-btn-row">
+      <button class="btn btn-secondary" data-close-modal="confirmModal">إلغاء</button>
+      <button class="btn btn-danger" id="confirmYes">تأكيد</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-host" id="toastHost"></div>
+
+<!-- Hidden print area, filled at print time -->
+<div id="printArea"></div>
+
+<script src="js/data.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/print-templates.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
